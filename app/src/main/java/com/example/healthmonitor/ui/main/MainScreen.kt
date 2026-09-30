@@ -35,6 +35,20 @@ import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Watch
+import androidx.compose.material3.Button
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.AlertDialog
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -46,6 +60,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalContext
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.health.connect.client.PermissionController
+import com.example.healthmonitor.data.HealthConnectManager
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
@@ -87,51 +106,150 @@ fun MainScreen(
   viewModel: MainScreenViewModel = viewModel { MainScreenViewModel(DefaultDataRepository()) },
 ) {
   val state by viewModel.uiState.collectAsStateWithLifecycle()
-  when (state) {
-    MainScreenUiState.Loading -> {
-      Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-          CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-          Spacer(modifier = Modifier.height(12.dp))
-          Text(
-            text = "Loading Vitals...",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-          )
-        }
-      }
-    }
-    is MainScreenUiState.Success -> {
-      MainScreen(data = (state as MainScreenUiState.Success).data, modifier = modifier)
-    }
-    is MainScreenUiState.Error -> {
-      Box(modifier = modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
-        Card(
-          colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-          shape = RoundedCornerShape(16.dp)
-        ) {
-          Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-              imageVector = Icons.Default.Warning,
-              contentDescription = "Error",
-              tint = MaterialTheme.colorScheme.error,
-              modifier = Modifier.size(32.dp)
-            )
-            Spacer(modifier = Modifier.width(12.dp))
-            Text(
-              "Error loading data: ${(state as MainScreenUiState.Error).throwable.message}",
-              color = MaterialTheme.colorScheme.onErrorContainer,
-              style = MaterialTheme.typography.bodyMedium
-            )
+  var showInputForm by remember { mutableStateOf(false) }
+  
+  val context = LocalContext.current
+  val coroutineScope = rememberCoroutineScope()
+  val healthConnectManager = remember { HealthConnectManager(context) }
+  
+  val requestPermissionActivityContract = PermissionController.createRequestPermissionResultContract()
+  val requestPermissions = rememberLauncherForActivityResult(requestPermissionActivityContract) { granted ->
+      if (granted.containsAll(healthConnectManager.permissions)) {
+          coroutineScope.launch {
+              val healthData = healthConnectManager.readLatestVitals()
+              if (healthData != null) {
+                  viewModel.updateVitals(
+                      healthData.heartRate,
+                      healthData.systolicBp,
+                      healthData.diastolicBp,
+                      healthData.steps,
+                      healthData.sleepHours,
+                      healthData.sleepMinutes
+                  )
+              }
           }
-        }
       }
-    }
+  }
+
+  val onSyncWearable: () -> Unit = {
+      coroutineScope.launch {
+          if (healthConnectManager.hasAllPermissions()) {
+              val healthData = healthConnectManager.readLatestVitals()
+              if (healthData != null) {
+                  viewModel.updateVitals(
+                      healthData.heartRate,
+                      healthData.systolicBp,
+                      healthData.diastolicBp,
+                      healthData.steps,
+                      healthData.sleepHours,
+                      healthData.sleepMinutes
+                  )
+              }
+          } else {
+              requestPermissions.launch(healthConnectManager.permissions)
+          }
+      }
+  }
+
+  androidx.compose.material3.Scaffold(
+      floatingActionButton = {
+          androidx.compose.material3.FloatingActionButton(onClick = { showInputForm = true }) {
+              Icon(Icons.Default.Add, contentDescription = "Add Vitals")
+          }
+      }
+  ) { paddingValues ->
+      Box(modifier = modifier.padding(paddingValues).fillMaxSize()) {
+          when (state) {
+            MainScreenUiState.Empty -> {
+              Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                  Icon(
+                    imageVector = Icons.Default.Info,
+                    contentDescription = "No Data",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(48.dp)
+                  )
+                  Spacer(modifier = Modifier.height(16.dp))
+                  Text(
+                    text = "No vitals data yet.",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                  )
+                  Spacer(modifier = Modifier.height(8.dp))
+                  Text(
+                    text = "Tap the + button to add.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                  )
+                  Spacer(modifier = Modifier.height(24.dp))
+                  Button(onClick = onSyncWearable) {
+                    Icon(Icons.Default.Watch, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Sync with Wearable")
+                  }
+                }
+              }
+            }
+            MainScreenUiState.Loading -> {
+              Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                  CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                  Spacer(modifier = Modifier.height(12.dp))
+                  Text(
+                    text = "Loading Vitals...",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                  )
+                }
+              }
+            }
+            is MainScreenUiState.Success -> {
+              MainScreen(
+                  data = (state as MainScreenUiState.Success).data, 
+                  onSyncWearable = onSyncWearable,
+                  modifier = Modifier
+              )
+            }
+            is MainScreenUiState.Error -> {
+              Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+                Card(
+                  colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                  shape = RoundedCornerShape(16.dp)
+                ) {
+                  Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                      imageVector = Icons.Default.Warning,
+                      contentDescription = "Error",
+                      tint = MaterialTheme.colorScheme.error,
+                      modifier = Modifier.size(32.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                      "Error loading data: ${(state as MainScreenUiState.Error).throwable.message}",
+                      color = MaterialTheme.colorScheme.onErrorContainer,
+                      style = MaterialTheme.typography.bodyMedium
+                    )
+                  }
+                }
+              }
+            }
+          }
+      }
+  }
+
+  if (showInputForm) {
+      VitalsInputDialog(
+          onDismiss = { showInputForm = false },
+          onSubmit = { hr, sysBp, diaBp, steps, slpH, slpM ->
+              viewModel.updateVitals(hr, sysBp, diaBp, steps, slpH, slpM)
+              showInputForm = false
+          }
+      )
   }
 }
 
 @Composable
-internal fun MainScreen(data: HealthData, modifier: Modifier = Modifier) {
+internal fun MainScreen(data: HealthData, onSyncWearable: () -> Unit = {}, modifier: Modifier = Modifier) {
   val scrollState = rememberScrollState()
   val isDark = isSystemInDarkTheme()
 
@@ -155,26 +273,15 @@ internal fun MainScreen(data: HealthData, modifier: Modifier = Modifier) {
         )
         Spacer(modifier = Modifier.height(2.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
-          // Pulsing live sync indicator
-          val infiniteTransition = rememberInfiniteTransition(label = "pulse")
-          val alpha by infiniteTransition.animateFloat(
-            initialValue = 0.3f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(
-              animation = tween(1000, easing = FastOutSlowInEasing),
-              repeatMode = RepeatMode.Reverse
-            ),
-            label = "alpha"
-          )
           Icon(
-            imageVector = Icons.Default.Circle,
-            contentDescription = "Live",
-            tint = StatusLowGreen,
-            modifier = Modifier.size(8.dp).alpha(alpha)
+            imageVector = Icons.Default.CheckCircle,
+            contentDescription = "Manual Mode",
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(12.dp)
           )
           Spacer(modifier = Modifier.width(6.dp))
           Text(
-            text = "Real-Time Sync Active",
+            text = "Manual Entry Mode",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
           )
@@ -182,28 +289,10 @@ internal fun MainScreen(data: HealthData, modifier: Modifier = Modifier) {
       }
 
       // Quick Status Badge
-      Surface(
-        color = MaterialTheme.colorScheme.primaryContainer,
-        shape = RoundedCornerShape(20.dp)
-      ) {
-        Row(
-          modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-          verticalAlignment = Alignment.CenterVertically
-        ) {
-          Icon(
-            imageVector = Icons.Default.CheckCircle,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(16.dp)
-          )
-          Spacer(modifier = Modifier.width(4.dp))
-          Text(
-            text = "Active",
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onPrimaryContainer
-          )
-        }
+      OutlinedButton(onClick = onSyncWearable) {
+          Icon(Icons.Default.Watch, contentDescription = null, modifier = Modifier.size(16.dp))
+          Spacer(modifier = Modifier.width(6.dp))
+          Text("Sync", style = MaterialTheme.typography.labelSmall)
       }
     }
 
@@ -541,6 +630,58 @@ fun PredictionCard(
       }
     }
   }
+}
+
+@Composable
+fun VitalsInputDialog(
+    onDismiss: () -> Unit,
+    onSubmit: (Int, Int, Int, Int, Int, Int) -> Unit
+) {
+    var heartRate by remember { mutableStateOf("") }
+    var systolicBp by remember { mutableStateOf("") }
+    var diastolicBp by remember { mutableStateOf("") }
+    var steps by remember { mutableStateOf("") }
+    var sleepHours by remember { mutableStateOf("") }
+    var sleepMinutes by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Enter Vitals") },
+        text = {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                OutlinedTextField(value = heartRate, onValueChange = { heartRate = it }, label = { Text("Heart Rate (BPM)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(value = systolicBp, onValueChange = { systolicBp = it }, label = { Text("Systolic BP") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(value = diastolicBp, onValueChange = { diastolicBp = it }, label = { Text("Diastolic BP") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(value = steps, onValueChange = { steps = it }, label = { Text("Steps") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(value = sleepHours, onValueChange = { sleepHours = it }, label = { Text("Sleep Hours") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                Spacer(modifier = Modifier.height(8.dp))
+                OutlinedTextField(value = sleepMinutes, onValueChange = { sleepMinutes = it }, label = { Text("Sleep Minutes") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                onSubmit(
+                    heartRate.toIntOrNull() ?: 0,
+                    systolicBp.toIntOrNull() ?: 0,
+                    diastolicBp.toIntOrNull() ?: 0,
+                    steps.toIntOrNull() ?: 0,
+                    sleepHours.toIntOrNull() ?: 0,
+                    sleepMinutes.toIntOrNull() ?: 0
+                )
+            }) {
+                Text("Submit")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
 }
 
 val sampleData = HealthData(72, 120, 80, 8432, 7, 20, "Low", "Normal")

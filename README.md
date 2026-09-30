@@ -4,9 +4,15 @@ An end-to-end Android mobile application and Machine Learning backend system tha
 
 ---
 
+### 📥 [Download Latest APK](apk/HealthMonitor.apk)
+
+---
+
 ## 🌟 Features
 
 - 📱 **Modern Android App**: Built with Jetpack Compose (Material 3), featuring custom health metrics cards, live pulse sync indicators, and dark/light mode UI.
+- ⌚ **Wearable Integration**: Seamlessly syncs vitals (Heart Rate, Blood Pressure, Steps, Sleep) automatically via **Android Health Connect**, supporting devices like Pixel Watch, Galaxy Watch, Fitbit, Garmin, and more.
+- ✍️ **Manual Entry Mode**: Option to manually input vitals when a wearable device is not available.
 - 🤖 **Machine Learning Intelligence**: Random Forest Classifiers trained on health parameters to dynamically predict:
   - **Risk Level**: `Low`, `Medium`, or `High`
   - **Stress Level**: `Normal`, `Moderate`, or `High`
@@ -19,16 +25,16 @@ An end-to-end Android mobile application and Machine Learning backend system tha
 ## 🏗 System Architecture
 
 ```
-+------------------------------------+        POST /predict        +-----------------------------------+
-|         Android Mobile App         | --------------------------> |        Flask ML Backend           |
-|      (Jetpack Compose Dashboard)   |                             |      (Vercel Cloud Server)        |
-|                                    |                             |                                   |
-| - Heart Rate (BPM)                 |                             | 1. StandardScaler (scaler.pkl)    |
-| - Blood Pressure (mmHg)            |                             | 2. Risk Model (risk_model.pkl)    |
-| - Steps (10k Goal Tracking)        |                             | 3. Stress Model (stress_model.pkl)|
-| - Sleep Duration (Hours/Minutes)   | <-------------------------- |                                   |
-| - Dynamic AI Color Badges          |    JSON { risk, stress }    | Returns ML Predictions            |
-+------------------------------------+                             +-----------------------------------+
++-------------------+     +------------------------------------+        POST /predict        +-----------------------------------+
+|    Smartwatch     | --> |         Android Mobile App         | --------------------------> |        Flask ML Backend           |
+| (via Health Conn) |     |      (Jetpack Compose Dashboard)   |                             |      (Vercel Cloud Server)        |
++-------------------+     |                                    |                             |                                   |
+                          | - Heart Rate (BPM)                 |                             | 1. StandardScaler (scaler.pkl)    |
++-------------------+     | - Blood Pressure (mmHg)            |                             | 2. Risk Model (risk_model.pkl)    |
+|   Manual Input    | --> | - Steps (10k Goal Tracking)        |                             | 3. Stress Model (stress_model.pkl)|
+| (Dialog UI entry) |     | - Sleep Duration (Hours/Minutes)   | <-------------------------- |                                   |
++-------------------+     | - Dynamic AI Color Badges          |    JSON { risk, stress }    | Returns ML Predictions            |
+                          +------------------------------------+                             +-----------------------------------+
 ```
 
 ---
@@ -43,7 +49,8 @@ Bangalore_major/
 │   │   ├── Navigation.kt                 # NavDisplay screen provider
 │   │   ├── data/
 │   │   │   ├── DataRepository.kt         # Health data repository & offline fallback
-│   │   │   └── HealthApiService.kt       # Retrofit REST API client for Flask server
+│   │   │   ├── HealthApiService.kt       # Retrofit REST API client for Flask server
+│   │   │   └── HealthConnectManager.kt   # Integration with Android Health Connect API
 │   │   ├── theme/
 │   │   │   ├── Color.kt                  # Emerald Teal color palette
 │   │   │   ├── Theme.kt                  # Material 3 light/dark color schemes
@@ -131,5 +138,5 @@ Open the project in **Android Studio** or build from command line:
 
 ## 🛠 Tech Stack
 
-- **Android Mobile App**: Kotlin, Jetpack Compose, Material 3, Coroutines, StateFlow, Retrofit 2, OkHttp 4, Gson.
+- **Android Mobile App**: Kotlin, Jetpack Compose, Material 3, Coroutines, StateFlow, Retrofit 2, OkHttp 4, Gson, Android Health Connect.
 - **Machine Learning & Backend**: Python 3.12, Flask, Scikit-Learn, Random Forest Classifier, Joblib, NumPy, Pandas, Vercel Serverless.
