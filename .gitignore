@@ -1,0 +1,14 @@
+*.iml
+.gradle
+.kotlin
+/local.properties
+/.idea/
+.DS_Store
+/build
+app/build/
+backend/venv/
+backend/__pycache__/
+backend/.vercel/
+.externalNativeBuild
+.cxx
+local.properties
