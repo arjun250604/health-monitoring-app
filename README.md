@@ -4,7 +4,7 @@ An end-to-end Android mobile application and Machine Learning backend system tha
 
 ---
 
-### 📥 [Download Latest APK](apk/HealthMonitor.apk)
+### 📥 [Download Latest APK](https://github.com/arjun250604/health-monitoring-app/releases/latest/download/HealthMonitor.apk)
 
 ---
 
